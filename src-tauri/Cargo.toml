@@ -7,7 +7,7 @@ edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "1", features = [] }
-reqwest = { version = "0.11", features = ["blocking", "json"] }
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 zip = "0.6"
 target-lexicon = "0.12"
 anyhow = "1.0"
@@ -25,7 +25,7 @@ futures = "0.3"
 futures-util = "0.3"
 tokio-tungstenite = "0.20"
 dirs = "5.0"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 
 uuid = { version = "1.4", features = ["v4"] }
 
