@@ -1,0 +1,51 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<External>null</External>
+	<External>nil</External>
+	<Item class="Script" referent="RBX0">
+		<Properties>
+			<Content name="LinkedSource"><null></null></Content>
+			<int64 name="SourceAssetId">-1</int64>
+			<BinaryString name="Tags"></BinaryString>
+			<string name="Name">LogListener</string>
+			<string name="ScriptGuid">{A1B2C3D4-E5F6-7890-1234-567890ABCDEF}</string>
+			<ProtectedString name="Source"><![CDATA[local LogService = game:GetService("LogService")
+local HttpService = game:GetService("HttpService")
+
+local COMPANION_URL = "http://localhost:3030/logs"
+
+local function onMessageOut(message, messageType)
+    -- Map Enum.MessageType to string
+    local typeStr = "info"
+    if messageType == Enum.MessageType.MessageOutput then
+        typeStr = "print"
+    elseif messageType == Enum.MessageType.MessageInfo then
+        typeStr = "info"
+    elseif messageType == Enum.MessageType.MessageWarning then
+        typeStr = "warning"
+    elseif messageType == Enum.MessageType.MessageError then
+        typeStr = "error"
+    end
+
+    local payload = {
+        message = message,
+        type = typeStr,
+        timestamp = os.time()
+    }
+
+    pcall(function()
+        HttpService:PostAsync(
+            COMPANION_URL,
+            HttpService:JSONEncode(payload),
+            Enum.HttpContentType.ApplicationJson,
+            false -- compress
+        )
+    end)
+end
+
+LogService.MessageOut:Connect(onMessageOut)
+print("LogListener Active: Forwarding logs to " .. COMPANION_URL)
+]]></ProtectedString>
+		</Properties>
+	</Item>
+</roblox>

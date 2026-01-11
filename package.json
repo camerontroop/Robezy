@@ -1,0 +1,12 @@
+{
+  "name": "connector-rob",
+  "version": "1.0.0",
+  "description": "Roblox Studio Connector Companion App",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.5.0"
+  }
+}

@@ -1,0 +1,133 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<Meta name="ExplicitAutoJoints">true</Meta>
+	<External>null</External>
+	<External>nil</External>
+	<Item class="Script" referent="RBX0">
+		<Properties>
+			<Content name="LinkedSource"><null></null></Content>
+			<int64 name="SourceAssetId">-1</int64>
+			<BinaryString name="Tags"></BinaryString>
+			<string name="Name">CommandListener</string>
+			<string name="ScriptGuid">{A1B2C3D4-E5F6-7890-1234-56789ABCDEF0}</string>
+			<ProtectedString name="Source"><![CDATA[local HttpService = game:GetService("HttpService")
+local CollectionService = game:GetService("CollectionService")
+
+local COMMAND_URL = "http://localhost:3030/roblox/commands"
+local EXECUTION_URL = "http://localhost:3030/roblox/execution"
+local POLL_INTERVAL = 0.5
+
+-- Helper to find instance by path string (e.g. "Workspace.Model.Part")
+local function findInstanceByPath(path)
+    local segments = {}
+    for segment in string.gmatch(path, "[^%.]+") do
+        table.insert(segments, segment)
+    end
+    
+    if #segments == 0 then return nil end
+    
+    local current = game
+    -- Handle service name at start (e.g. "Workspace" or "ReplicatedStorage")
+    local serviceName = segments[1]
+    local service = game:GetService(serviceName) -- Try to get service safely
+    if not service then
+         -- Fallback if user typed "Workspace" but it's not a service (unlikely)
+         if serviceName == "Workspace" then current = workspace 
+         else return nil end
+    else
+         current = service
+    end
+
+    for i = 2, #segments do
+        current = current:FindFirstChild(segments[i])
+        if not current then return nil end
+    end
+    
+    return current
+end
+
+local function serializeProperties(inst)
+    local data = {}
+    
+    -- Basic Identity
+    data.Name = inst.Name
+    data.ClassName = inst.ClassName
+    
+    -- Physics (BasePart)
+    if inst:IsA("BasePart") then
+        data.Size = {inst.Size.X, inst.Size.Y, inst.Size.Z}
+        data.Position = {inst.Position.X, inst.Position.Y, inst.Position.Z}
+        data.Anchored = inst.Anchored
+        data.CanCollide = inst.CanCollide
+        data.Transparency = inst.Transparency
+        data.Color = inst.Color:ToHex()
+        data.Material = inst.Material.Name
+        data.Mass = inst:GetMass()
+        data.CastShadow = inst.CastShadow
+    end
+    
+    -- Logic (Scripts)
+    if inst:IsA("LuaSourceContainer") then
+        -- Attempt to read source (Plugin Security needed)
+        local success, source = pcall(function() return inst.Source end)
+        if success then
+             data.SourcePreview = string.sub(source, 1, 500) -- First 500 chars
+             data.LineCount = #string.split(source, "\n")
+        end
+    end
+    
+    if inst:IsA("Script") then
+        data.Enabled = inst.Enabled
+        data.RunContext = inst.RunContext.Name
+    end
+    
+    -- Hierarchy
+    data.Tags = CollectionService:GetTags(inst)
+    data.Attributes = inst:GetAttributes()
+    
+    return data
+end
+
+local function executeCommand(cmd)
+    if cmd.command_type == "query:instance" then
+        local path = cmd.params.path
+        local inst = findInstanceByPath(path)
+        
+        if inst then
+            local props = serializeProperties(inst)
+            local payload = {
+                path = path,
+                properties = props
+            }
+            pcall(function()
+                HttpService:PostAsync(EXECUTION_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
+            end)
+            print("CommandListener: Inspected " .. path)
+        else
+            print("CommandListener: Could not find path " .. path)
+        end
+    end
+end
+
+local function pollCommands()
+    local success, response = pcall(function()
+        return HttpService:GetAsync(COMMAND_URL, false)
+    end)
+    
+    if success then
+        local valid, commands = pcall(function() return HttpService:JSONDecode(response) end)
+        if valid and type(commands) == "table" then
+            for _, cmd in ipairs(commands) do
+                executeCommand(cmd)
+            end
+        end
+    end
+end
+
+while true do
+    pollCommands()
+    task.wait(POLL_INTERVAL)
+end
+]]></ProtectedString>
+		</Properties>
+	</Item>
+</roblox>

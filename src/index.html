@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoBezy</title>
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            /* Very Dark Grey (Almost Black) */
+            --sidebar-bg: #000000;
+            /* Pure Black */
+            --sidebar-text: #a1a1aa;
+            /* Light Grey */
+            --sidebar-active: #ffffff;
+            /* White */
+            --sidebar-hover: #27272a;
+            /* Zinc 800 */
+            --card-bg: #171717;
+            /* Neutral Dark */
+            --text-primary: #ededed;
+            /* White-ish */
+            --text-secondary: #a1a1aa;
+            /* Grey */
+            --border-color: #27272a;
+            /* Zinc 800 */
+            --primary-color: #dc2626;
+            /* Red 600 */
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --log-bg: #000000;
+            /* Black */
+            --log-text: #d4d4d8;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            font-size: 14px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background-color: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            color: var(--sidebar-active);
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 40px;
+        }
+
+        .logo img {
+            margin-right: 12px;
+            height: 28px;
+            width: 28px;
+            /* fill: var(--primary-color); */
+        }
+
+        .nav-item {
+            padding: 12px 16px;
+            margin-bottom: 4px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background-color: var(--sidebar-hover);
+            color: var(--sidebar-active);
+        }
+
+        .nav-item.active {
+            background-color: var(--primary-color);
+            color: #ffffff;
+        }
+
+        .nav-icon {
+            margin-right: 12px;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--sidebar-hover);
+            padding-top: 20px;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--sidebar-text);
+        }
+
+        .dot.online {
+            background-color: var(--success-color);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Main Content */
+        .main {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            height: 64px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 32px;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .content {
+            flex-grow: 1;
+            padding: 32px;
+            overflow-y: auto;
+        }
+
+        /* Views */
+        .view-section {
+            display: none;
+        }
+
+        .view-section.active {
+            display: block;
+        }
+
+        /* Sessions Grid */
+        .sessions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .session-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .session-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            border-color: var(--primary-color);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .place-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .place-id {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .badge {
+            background: #ecfdf5;
+            color: var(--success-color);
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }
+
+        .card-info {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+        }
+
+        .info-row span {
+            margin-left: 8px;
+            font-family: monospace;
+            color: var(--text-primary);
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 100px;
+        }
+
+        /* Terminal / Logs */
+        .terminal {
+            background: var(--log-bg);
+            color: var(--log-text);
+            border-radius: 12px;
+            padding: 20px;
+            height: calc(100vh - 150px);
+            overflow-y: auto;
+            font-family: 'Menlo', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 4px;
+        }
+
+        .log-time {
+            color: #64748b;
+            margin-right: 10px;
+        }
+
+        .log-type.info {
+            color: #60a5fa;
+        }
+
+        .log-type.error {
+            color: #f87171;
+        }
+
+        .log-type.warn {
+            color: #fbbf24;
+        }
+
+        .log-type.event {
+            color: #a78bfa;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="sidebar">
+        <div class="logo">
+            <img src="logo.png" alt="Logo">
+            RoBezy v3
+        </div>
+
+        <div class="nav-item active" onclick="setView('dashboard', this)">
+            <span class="nav-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <rect width="7" height="9" x="3" y="3" rx="1" />
+                    <rect width="7" height="5" x="14" y="3" rx="1" />
+                    <rect width="7" height="9" x="14" y="12" rx="1" />
+                    <rect width="7" height="5" x="3" y="16" rx="1" />
+                </svg>
+            </span>
+            Dashboard
+        </div>
+        <div class="nav-item" onclick="setView('logs', this)">
+            <span class="nav-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M15 12h-5" />
+                    <path d="M15 8h-5" />
+                    <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+                    <path
+                        d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3" />
+                </svg>
+            </span>
+            Live Logs
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="status-pill">
+                <span>Core (3032)</span>
+                <div id="core-dot" class="dot"></div>
+            </div>
+            <div class="status-pill">
+                <span>Events (3031)</span>
+                <div id="ws-dot" class="dot"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <div class="page-title" id="page-title">Dashboard</div>
+        </div>
+        <div class="content">
+
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="view-section active">
+                <div id="sessions-container" class="sessions-grid">
+                    <!-- Sessions injected here -->
+                </div>
+                <div id="empty-state" class="empty-state" style="display:none;">
+                    <h3>No Active Sessions</h3>
+                    <p>Open Roblox Studio and use the RoBezy Plugin to connect.</p>
+                </div>
+            </div>
+
+            <!-- Logs View -->
+            <div id="view-logs" class="view-section">
+                <div id="terminal" class="terminal">
+                    <!-- Logs injected here -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const coreDot = document.getElementById('core-dot');
+        const wsDot = document.getElementById('ws-dot');
+        const sessionsContainer = document.getElementById('sessions-container');
+        const emptyState = document.getElementById('empty-state');
+        const terminal = document.getElementById('terminal');
+        const pageTitle = document.getElementById('page-title');
+
+        let isCoreOnline = false;
+
+        // --- NAVIGATION ---
+        function setView(viewName, el) {
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            if (el) el.classList.add('active');
+
+            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+            document.getElementById('view-' + viewName).classList.add('active');
+
+            pageTitle.innerText = viewName === 'dashboard' ? 'Active Sessions' : 'Live Event Logs';
+        }
+
+        // --- CORE POLLING (3032) ---
+        async function pollCore() {
+            try {
+                const res = await fetch('http://127.0.0.1:3032/robezy/sessions');
+                if (res.ok) {
+                    const sessions = await res.json();
+                    isCoreOnline = true;
+                    coreDot.classList.add('online');
+                    renderSessions(sessions);
+                } else {
+                    throw new Error("HTTP Error");
+                }
+            } catch (e) {
+                isCoreOnline = false;
+                coreDot.classList.remove('online');
+                sessionsContainer.innerHTML = '';
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = `<h3>Backend Offline</h3><p>Ensure the app helper process is running on port 3032.</p>`;
+            }
+        }
+
+        function renderSessions(sessions) {
+            if (sessions.length === 0) {
+                sessionsContainer.innerHTML = '';
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = `<h3>No Active Sessions</h3><p>Open Roblox Studio and use the RoBezy Plugin to connect.</p>`;
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            // Simple checksum to avoid flicker? Naive replace for now.
+            sessionsContainer.innerHTML = sessions.map(s => {
+                const placeIdText = s.place_id === 0 ? `<span style="color:var(--warning-color)">Unpublished (0)</span>` : s.place_id;
+                // Files count not in list view? 
+                // We can fetch details if needed, but for now list only has basic meta. 
+                // Wait, get_all_sessions_meta returns SessionIdentity.
+
+                return `
+                <div class="session-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="place-name">${s.place_name}</div>
+                            <div class="place-id">Place ID: ${placeIdText}</div>
+                        </div>
+                        <div class="badge">Connected</div>
+                    </div>
+                    <div class="card-info">
+                        <div class="info-row">
+                            Project ID: <span title="${s.project_id}">${s.project_id ? s.project_id.substring(0, 8) + '...' : 'N/A'}</span>
+                        </div>
+                        <div class="info-row">
+                            Session UUID: <span title="${s.session_id}">${s.session_id.substring(0, 8)}...</span>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        setInterval(pollCore, 2000);
+        pollCore();
+
+        // --- WEBSOCKET LOGS (3031) ---
+        function connectWS() {
+            const ws = new WebSocket('ws://127.0.0.1:3031');
+
+            ws.onopen = () => {
+                wsDot.classList.add('online');
+                addLog('System', 'Connected to Event Stream', 'info');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    // Depending on structure of InternalBroadcast
+                    // It might be { type: "Log", content: ... } or just raw object if serde serialized enum tags it
+
+                    if (data.type === 'log') {
+                        addLog('Log', JSON.stringify(data.content), 'info');
+                    } else if (data.type === 'file:event') {
+                        addLog('File', `${data.kind}: ${data.path}`, 'event');
+                    } else {
+                        addLog('Event', JSON.stringify(data), 'info');
+                    }
+                } catch (e) {
+                    addLog('Raw', event.data, 'info');
+                }
+            };
+
+            ws.onclose = () => {
+                wsDot.classList.remove('online');
+                setTimeout(connectWS, 3000);
+            };
+        }
+
+        function addLog(source, message, type) {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const time = new Date().toLocaleTimeString();
+            div.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-type ${type}">${source}:</span> ${message}`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        connectWS();
+
+    </script>
+</body>
+
+</html>
