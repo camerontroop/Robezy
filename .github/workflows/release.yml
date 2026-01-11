@@ -8,6 +8,9 @@ on:
 
 jobs:
   build-and-release:
+    permissions:
+      contents: write
+    
     strategy:
       fail-fast: false
       matrix:
