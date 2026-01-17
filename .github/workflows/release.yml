@@ -49,3 +49,17 @@ jobs:
           releaseBody: "See the assets to download this version and install."
           releaseDraft: true
           prerelease: false
+
+      - name: Zip macOS App (Fix for Damaged Error)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          cd src-tauri/target/release/bundle/macos
+          zip -r RoBezy_Mac_App.zip RoBezy.app
+          
+      - name: Upload macOS Zip
+        if: matrix.platform == 'macos-latest'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: src-tauri/target/release/bundle/macos/RoBezy_Mac_App.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
