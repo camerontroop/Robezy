@@ -1,6 +1,6 @@
 [package]
 name = "robezy"
-version = "1.0.0"
+version = "1.0.1"
 description = "RoBezy Professional Studio Connector"
 authors = ["Antigravity"]
 edition = "2021"
