@@ -47,7 +47,6 @@
             "shortDescription": "",
             "targets": [
                 "app",
-                "dmg",
                 "nsis"
             ],
             "windows": {

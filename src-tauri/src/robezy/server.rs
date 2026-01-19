@@ -319,6 +319,7 @@ pub async fn start_robezy_server(session_manager: Arc<Mutex<SessionManager>>, po
         .or(sessions_route)
         .or(session_by_id_route)
         .or(proxy_write_route)
+        .or(bind_route)
         .with(cors);
 
     println!("RoBezy HTTP Server listening on 127.0.0.1:{}", port);
