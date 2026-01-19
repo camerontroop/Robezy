@@ -174,41 +174,22 @@ print("LogListener Active")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
-local COMPANION_URL = "http://localhost:3030/roblox/workspace" -- Updated URL for new endpoint
-local DEBOUNCE_TIME = 1.0
+local COMPANION_URL = "http://localhost:3030/roblox/workspace"
+local DEBOUNCE_TIME = 2.0
 local lastUpdate = 0
 local updatePending = false
 
--- LIGHT SERIALIZATION (For UI Tree)
--- Minimal data: Name, ClassName, Children structure
-local function serializeLight(inst)
-    local children = {}
-    for _, child in ipairs(inst:GetChildren()) do
-        table.insert(children, serializeLight(child))
-    end
-    
-    return {
-        Name = inst.Name,
-        ClassName = inst.ClassName,
-        Children = children,
-        Path = inst:GetFullName()
-    }
-end
-
--- FULL SERIALIZATION (For Agent Context)
--- Rich data including physics, logic, attributes
-local function serializeFull(inst)
+-- flatten: converts instance to flat serializable map
+local function serializeInstance(inst)
     local data = {}
-    
-    -- Basic
     data.Name = inst.Name
     data.ClassName = inst.ClassName
     data.Path = inst:GetFullName()
     
-    -- Attributes
+    -- Attributes (often useful for agents)
     data.Attributes = inst:GetAttributes()
 
-    -- Physics (BasePart)
+    -- Physics
     if inst:IsA("BasePart") then
         data.Size = {inst.Size.X, inst.Size.Y, inst.Size.Z}
         data.Position = {inst.Position.X, inst.Position.Y, inst.Position.Z}
@@ -219,7 +200,7 @@ local function serializeFull(inst)
         data.Material = inst.Material.Name
     end
     
-    -- Logic (Scripts/Values)
+    -- Logic
     if inst:IsA("Script") or inst:IsA("LocalScript") then
         data.Enabled = inst.Enabled
     end
@@ -228,27 +209,11 @@ local function serializeFull(inst)
         pcall(function() data.Value = inst.Value end)
     end
     
-    local children = {}
-    for _, child in ipairs(inst:GetChildren()) do
-        table.insert(children, serializeFull(child))
-    end
-    data.Children = children
-
     return data
 end
 
-local function getServiceSnapshot(serviceName, serializer)
-    local service = game:GetService(serviceName)
-    if service then
-        return serializer(service)
-    end
-    return nil
-end
-
 local function sendSnapshot()
-    -- Guard: Only allow Server to send HTTP requests (prevents "Http requests can only be executed by game server" on Client)
     if not RunService:IsServer() then return end
-
     if os.clock() - lastUpdate < DEBOUNCE_TIME then
         if not updatePending then
             updatePending = true
@@ -272,46 +237,59 @@ local function sendSnapshot()
         "SoundService"
     }
 
-    -- 1. SEND LIGHT SNAPSHOT (Tree)
-    local lightServices = {}
+    -- CHUNKED SENDER
+    local buffer = {}
+    local MAX_BUFFER = 200 -- Sends ~200 items per chunk (Safe for limit)
+    local chunkId = 0
+    local sessionId = tostring(os.time()) -- Unique ID for this snapshot sequence
+
+    local function flush()
+        if #buffer == 0 then return end
+        chunkId = chunkId + 1
+        
+        local payload = {
+            type = "workspace:fragment",
+            session_id = sessionId,
+            chunk_index = chunkId,
+            items = buffer,
+            timestamp = os.time()
+        }
+        
+        pcall(function()
+            HttpService:PostAsync(COMPANION_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
+        end)
+        
+        buffer = {}
+        task.wait(0.05) -- Slight yield to prevent lag/network choke
+    end
+
+    local function visit(inst)
+        table.insert(buffer, serializeInstance(inst))
+        if #buffer >= MAX_BUFFER then
+             flush()
+        end
+    end
+
+    local function traverse(inst)
+        visit(inst)
+        for _, child in ipairs(inst:GetChildren()) do
+            traverse(child)
+        end
+    end
+
+    print("Connector: Starting Full Snapshot (Chunked)...")
     for _, name in ipairs(servicesToMap) do
-        lightServices[name] = getServiceSnapshot(name, serializeLight)
+        local svc = game:GetService(name)
+        if svc then
+            traverse(svc)
+        end
     end
-
-    local lightPayload = {
-        type = "workspace:tree",
-        services = lightServices,
-        timestamp = os.time()
-    }
-    local success, err = pcall(function()
-        HttpService:PostAsync(COMPANION_URL, HttpService:JSONEncode(lightPayload), Enum.HttpContentType.ApplicationJson, false)
-    end)
-    if not success then
-        print("Connector Error (Light Snapshot): " .. tostring(err))
-    end
+    flush() -- Final flush
     
-    -- 2. SEND FULL SNAPSHOT (Deep Context) - DISABLED (Too heavy, hits 1MB limit)
-    -- local fullServices = {}
-    -- for _, name in ipairs(servicesToMap) do
-    --     fullServices[name] = getServiceSnapshot(name, serializeFull)
-    -- end
-
-    -- local fullPayload = {
-    --     type = "workspace:full",
-    --     services = fullServices,
-    --     timestamp = os.time()
-    -- }
-    -- local successFull, errFull = pcall(function()
-    --     HttpService:PostAsync(COMPANION_URL, HttpService:JSONEncode(fullPayload), Enum.HttpContentType.ApplicationJson, false)
-    -- end)
-    -- if not successFull then
-    --     -- print("Connector Error (Full Snapshot): " .. tostring(errFull)) 
-    -- end
-    
-    print("Connector: Game Snapshot Sent loop complete")
+    print("Connector: Snapshot Complete (" .. chunkId .. " chunks)")
 end
 
--- Listeners
+-- Listeners (Debounced)
 for _, serviceName in ipairs({"Workspace", "ReplicatedStorage", "ServerScriptService", "ServerStorage", "StarterGui", "StarterPack", "StarterPlayer", "Lighting"}) do
     local service = game:GetService(serviceName)
     if service then
@@ -321,7 +299,7 @@ for _, serviceName in ipairs({"Workspace", "ReplicatedStorage", "ServerScriptSer
 end
 
 task.defer(sendSnapshot)
-print("WorkspaceListener Active")
+print("WorkspaceListener Active (Chunked)")
 ]]></ProtectedString>
 		</Properties>
 	</Item>

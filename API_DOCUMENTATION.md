@@ -101,6 +101,21 @@ Sent when a new project connects.
 }
 ```
 
+#### `workspace:fragment` (Chunked Snapshot)
+Sent when the game tree is too large for a single payload. The client should accumulate these fragments to build the full context.
+
+```json
+{
+  "type": "workspace:fragment",
+  "session_id": "1234567890",
+  "chunk_index": 1,
+  "items": [
+    { "Name": "Part1", "ClassName": "Part", "Path": "Workspace.Part1", ... }
+  ],
+  "timestamp": 1234567890
+}
+```
+
 #### `status`
 Start a connection.
 ```json
