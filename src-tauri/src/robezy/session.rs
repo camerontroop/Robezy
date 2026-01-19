@@ -110,38 +110,55 @@ impl SessionManager {
 
             if let Some(provided_id) = &identity.project_id {
                 // Legacy/Explicit Mode
-                // Use first 8 chars of GUID for brevity
                 let unique_suffix = if provided_id.len() >= 8 { &provided_id[0..8] } else { provided_id };
                 let folder_name = format!("{}_{}", safe_name, unique_suffix);
                 final_folder_path = Some(docs.join(folder_name));
             } else {
-                // Stable Mode (Unsaved Place)
-                let stable_folder = docs.join(&safe_name);
-                let id_file = stable_folder.join("robezy.id");
-                
-                if stable_folder.exists() && id_file.exists() {
-                     // Reuse existing ID
-                     if let Ok(content) = std::fs::read_to_string(&id_file) {
-                         let stored_id = content.trim().to_string();
-                         if !stored_id.is_empty() {
-                             println!("RoBezy: Resumed stable project ID {} from {}", stored_id, safe_name);
-                             resolved_id = stored_id;
-                             // Update identity so dedup works
-                             identity.project_id = Some(resolved_id.clone());
-                         }
-                     }
+                // Stable Mode: Smart Uniqueness Loop
+                let mut found_path: Option<PathBuf> = None;
+                let mut attempt = 0;
+                let max_attempts = 100; // Prevent infinite loops
+
+                while attempt < max_attempts {
+                    let suffix = if attempt == 0 { "".to_string() } else { format!("_{}", attempt) };
+                    let candidate_name = format!("{}{}", safe_name, suffix);
+                    let candidate_path = docs.join(&candidate_name);
+                    let id_file = candidate_path.join("robezy.id");
+                    
+                    if !candidate_path.exists() {
+                        // Case A: New Folder -> CLAIM IT
+                        let _ = std::fs::create_dir_all(&candidate_path);
+                        let _ = std::fs::write(&id_file, &resolved_id);
+                        found_path = Some(candidate_path);
+                        break;
+                    } else if !id_file.exists() {
+                        // Case B: Folder exists but no Owner -> CLAIM IT
+                        // (Assume it's an abandoned folder or a user manually created one)
+                        let _ = std::fs::write(&id_file, &resolved_id);
+                        found_path = Some(candidate_path);
+                        break;
+                    } else {
+                        // Case C: Folder exists AND has Owner -> CHECK IT
+                        if let Ok(content) = std::fs::read_to_string(&id_file) {
+                             let stored_id = content.trim().to_string();
+                             if stored_id == resolved_id {
+                                 // It's OUR folder! -> BIND
+                                 found_path = Some(candidate_path);
+                                 // Ensure identity carries this persistent ID now
+                                 identity.project_id = Some(resolved_id.clone());
+                                 break;
+                             } else {
+                                 // It's THEIR folder! -> SKIP
+                                 // Loop continues to next suffix
+                             }
+                        } else {
+                            // Read error? Treat as claimed/locked -> SKIP
+                        }
+                    }
+                    attempt += 1;
                 }
                 
-                if !stable_folder.exists() {
-                     let _ = std::fs::create_dir_all(&stable_folder);
-                     // Write ID
-                     let _ = std::fs::write(&id_file, &resolved_id);
-                } else if !id_file.exists() {
-                     // Folder exists but no ID? Claim it.
-                     let _ = std::fs::write(&id_file, &resolved_id);
-                }
-                
-                final_folder_path = Some(stable_folder);
+                final_folder_path = found_path;
             }
         }
 
