@@ -2869,7 +2869,7 @@ dependencies = [
 
 [[package]]
 name = "robezy"
-version = "1.0.6"
+version = "1.0.10"
 dependencies = [
  "anyhow",
  "dirs",

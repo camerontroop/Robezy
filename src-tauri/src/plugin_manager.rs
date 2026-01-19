@@ -170,18 +170,20 @@ print("LogListener Active")
 			<BinaryString name="Tags"></BinaryString>
 			<string name="Name">WorkspaceListener</string>
 			<string name="ScriptGuid">{B2C3D4E5-F6G7-8901-2345-67890ABCDEF0}</string>
-			<ProtectedString name="Source"><![CDATA[local HttpService = game:GetService("HttpService")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
+			<ProtectedString name="Source"><![CDATA[local RunService = game:GetService("RunService")
+local ServerScriptService = game:GetService("ServerScriptService")
+local HttpService = game:GetService("HttpService")
 
+-- CONSTANTS
 local COMPANION_URL = "http://localhost:3030/roblox/workspace"
 local DEBOUNCE_TIME = 2.0
+
+-- STATE
 local lastUpdate = 0
 local updatePending = false
 
--- flatten: converts instance to flat serializable map
+-- === PART 1: EDIT MODE LISTENER (Restored for Compatibility) ===
 local function serializeInstance(inst)
-    -- Minimal Payload (User Request: "It's all about the names")
     return {
         Name = inst.Name,
         ClassName = inst.ClassName,
@@ -190,7 +192,10 @@ local function serializeInstance(inst)
 end
 
 local function sendSnapshot()
-    if not RunService:IsServer() then return end
+    -- STRICT GUARD: Only sync in Edit Mode.
+    -- If RunService is in Run Mode (Play Solo/Server), do NOT sync.
+    if not RunService:IsEdit() then return end
+    
     if os.clock() - lastUpdate < DEBOUNCE_TIME then
         if not updatePending then
             updatePending = true
@@ -214,11 +219,19 @@ local function sendSnapshot()
         "SoundService"
     }
 
-    -- CHUNKED SENDER
     local buffer = {}
-    local MAX_BUFFER = 2000 -- Optimized for lightweight items
+    local MAX_BUFFER = 2000 
     local chunkId = 0
-    local sessionId = tostring(os.time()) -- Unique ID for this snapshot sequence
+    local sessionId = tostring(os.time()) 
+
+     -- Try to find stable Session ID
+    pcall(function()
+        local sv = game:GetService("ServerStorage"):FindFirstChild("RoBezyConfig")
+        if sv and sv:IsA("StringValue") then
+            local data = HttpService:JSONDecode(sv.Value)
+            if data.id then sessionId = data.id end
+        end
+    end)
 
     local function flush()
         if #buffer == 0 then return end
@@ -237,36 +250,28 @@ local function sendSnapshot()
         end)
         
         buffer = {}
-        task.wait(0.05) -- Slight yield to prevent lag/network choke
+        task.wait(0.05) 
     end
 
     local function visit(inst)
         table.insert(buffer, serializeInstance(inst))
-        if #buffer >= MAX_BUFFER then
-             flush()
-        end
+        if #buffer >= MAX_BUFFER then flush() end
     end
 
     local function traverse(inst)
         visit(inst)
-        for _, child in ipairs(inst:GetChildren()) do
-            traverse(child)
-        end
+        for _, child in ipairs(inst:GetChildren()) do traverse(child) end
     end
 
-    print("Connector: Starting Full Snapshot (Chunked)...")
+    print("RoBezy: Scanning Tree (Edit Mode)...") 
     for _, name in ipairs(servicesToMap) do
         local svc = game:GetService(name)
-        if svc then
-            traverse(svc)
-        end
+        if svc then traverse(svc) end
     end
-    flush() -- Final flush
-    
-    print("Connector: Snapshot Complete (" .. chunkId .. " chunks)")
+    flush()
 end
 
--- Listeners (Debounced)
+-- LISTENERS (The "As Is" Compatibility)
 for _, serviceName in ipairs({"Workspace", "ReplicatedStorage", "ServerScriptService", "ServerStorage", "StarterGui", "StarterPack", "StarterPlayer", "Lighting"}) do
     local service = game:GetService(serviceName)
     if service then
@@ -274,9 +279,23 @@ for _, serviceName in ipairs({"Workspace", "ReplicatedStorage", "ServerScriptSer
         service.DescendantRemoving:Connect(sendSnapshot)
     end
 end
-
 task.defer(sendSnapshot)
-print("WorkspaceListener Active (Chunked)")
+
+
+-- CLEANUP LEGACY INJECTION (Revert to Edit Mode Truth)
+local function cleanupRuntimeScript()
+    local existing = ServerScriptService:FindFirstChild("RoBezy_Snapshot_Link")
+    if existing then
+        pcall(function()
+            existing:Destroy()
+            print("RoBezy: Cleaned up legacy Runtime Monitor")
+        end)
+    end
+end
+
+cleanupRuntimeScript()
+
+print("WorkspaceListener Plugin Active (Edit Mode Only)")
 ]]></ProtectedString>
 		</Properties>
 	</Item>
@@ -1202,9 +1221,14 @@ local function gatherProjectFiles()
     for _, service in ipairs(services) do
         if service then
             for _, desc in ipairs(service:GetDescendants()) do
-                 if desc:IsA("LuaSourceContainer") then
-                     local path = getPath(desc)
-                     local ext = ".lua"
+                     if desc:IsA("LuaSourceContainer") then
+                         -- Ignore internal Runtime Link
+                         if desc.Name == "RoBezy_Snapshot_Link" then
+                             -- verify parent is ServerScriptService just to be safe?
+                             -- Or just ignore global uniqueness
+                         else
+                             local path = getPath(desc)
+                             local ext = ".lua"
                      
                      if desc:IsA("LocalScript") then
                         ext = ".client.lua"
@@ -1218,10 +1242,11 @@ local function gatherProjectFiles()
                         end
                      end
                      
-                     table.insert(files, {
-                         path = path .. ext,
-                         content = desc.Source
-                     })
+                         table.insert(files, {
+                             path = path .. ext,
+                             content = desc.Source
+                         })
+                     end -- End Ignore Check
                  end
             end
         end

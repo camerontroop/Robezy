@@ -89,9 +89,92 @@ pub struct RobloxCommand {
 
 pub type CommandQueue = Arc<Mutex<Vec<RobloxCommand>>>;
 
-pub async fn start_server(log_rx: broadcast::Sender<InternalBroadcast>, command_queue: CommandQueue) {
+// Add SessionManager imports
+use crate::robezy::session::{SessionManager, FileChange};
+
+pub async fn start_server(log_rx: broadcast::Sender<InternalBroadcast>, command_queue: CommandQueue, session_manager: Arc<Mutex<SessionManager>>) {
     let port = 3031;
     println!("WebSocket server initializing on port {}", port);
+
+    // Spawn a dedicated task to bridge FileEvents (Watcher) to SessionManager (Plugin Queue)
+    let mut bridge_rx = log_rx.subscribe();
+    let bridge_mgr = session_manager.clone();
+    
+    tauri::async_runtime::spawn(async move {
+        while let Ok(msg) = bridge_rx.recv().await {
+            if let InternalBroadcast::FileEvent { path, content, kind, source_id } = msg {
+                // If source_id is None, it means the event came from the Disk Watcher (or System)
+                // We must queue this for the Plugin to see.
+                if source_id.is_none() && kind == "update" {
+                    if let Some(mut mgr) = bridge_mgr.lock().ok() {
+                         // We need to find which session owns this file
+                         let sessions = mgr.get_all_sessions_meta(); // Get IDs first to avoid big iteration? 
+                         // Check all sessions
+                         // TODO: Optimization - Is there a better lookup? For now, linear scan is fine (few sessions).
+                         
+                         // We need to iterate mutable sessions to push to queue.
+                         // SessionManager structure is: sessions: HashMap<String, Session>
+                         // But 'mgr' is the MutexGuard. We can iterate directly.
+                         
+                         let mut target_session_id: Option<String> = None;
+                         let mut relative_path = String::new();
+                         let mut class_name = Some("ModuleScript".to_string()); // Default
+                         
+                         for (id, session) in &mgr.sessions {
+                             if let Some(bound) = &session.bound_folder {
+                                 // Check path containment
+                                 if path.starts_with(bound) {
+                                     // Found match!
+                                     target_session_id = Some(id.clone());
+                                     // Compute relative path
+                                     // path: /Users/foo/Bar/Workspace/Part.server.lua
+                                     // bound: /Users/foo/Bar
+                                     // rel: Workspace/Part.server.lua
+                                     if let Ok(rel) = std::path::Path::new(&path).strip_prefix(bound) {
+                                         // Clean extension and infer class
+                                         let filename = rel.file_name().unwrap_or_default().to_string_lossy().to_string();
+                                         
+                                         // Logic matches plugin_manager.rs expectations
+                                         if filename.ends_with(".server.lua") {
+                                             class_name = Some("Script".to_string());
+                                         } else if filename.ends_with(".client.lua") {
+                                             class_name = Some("LocalScript".to_string());
+                                         } else if filename.ends_with(".lua") {
+                                              class_name = Some("ModuleScript".to_string());
+                                         }
+                                         
+                                         // Plugin expects a "Roblox Path" (e.g. Workspace.Part)?
+                                         // NO. Plugin 'pollChanges' logic calls 'ensureInstance(change.path, ...)'
+                                         // 'ensureInstance' splits by '/'.
+                                         // So we should send "Workspace/Part.server.lua" (Relative FS Path).
+                                         // The plugin function 'ensureInstance' cleans the extension itself.
+                                         // So we just send the relative path as is.
+                                         relative_path = rel.to_string_lossy().to_string();
+                                     }
+                                     break; // Only match one session
+                                 }
+                             }
+                         }
+                         
+                         if let Some(sess_id) = target_session_id {
+                             if let Some(session) = mgr.sessions.get_mut(&sess_id) {
+                                 if let Ok(mut queue) = session.outbound_queue.lock() {
+                                     queue.push(FileChange {
+                                         path: relative_path,
+                                         content: content.clone(),
+                                         change_type: "write".to_string(),
+                                         class_name: class_name,
+                                         guid: None,
+                                         is_script: true // Assume watcher only picks up scripts for now
+                                     });
+                                 }
+                             }
+                         }
+                    }
+                }
+            }
+        }
+    });
 
     // IPv4 Listener
     let rx_v4_broadcast = log_rx.clone();

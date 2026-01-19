@@ -51,13 +51,14 @@ fn main() {
                 }
             });
 
-            // --- Event Server (3031) ---
-            tauri::async_runtime::spawn(server_ws::start_server(log_tx, command_queue));
-            
             // --- RoBezy (Studio-First) Server (3032) ---
             use crate::robezy::session::SessionManager;
             let session_manager = Arc::new(Mutex::new(SessionManager::new()));
-            tauri::async_runtime::spawn(robezy::server::start_robezy_server(session_manager, 3032));
+            tauri::async_runtime::spawn(robezy::server::start_robezy_server(session_manager.clone(), 3032));
+            
+             // --- Event Server (3031) ---
+            // Moved below creation of session_manager so we can pass it
+            tauri::async_runtime::spawn(server_ws::start_server(log_tx, command_queue, session_manager));
             
             Ok(())
         })

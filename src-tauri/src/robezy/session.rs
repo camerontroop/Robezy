@@ -61,7 +61,7 @@ impl Session {
 }
 
 pub struct SessionManager {
-    sessions: HashMap<String, Session>,
+    pub sessions: HashMap<String, Session>,
     file_managers: HashMap<String, NativeFileManager>,
     staging_files: HashMap<String, Vec<ProjectFile>>, // Temporary storage for chunked uploads
 }
