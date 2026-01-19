@@ -36,7 +36,7 @@ pub async fn start_server(log_tx: broadcast::Sender<InternalBroadcast>, command_
             // Check type
             let msg_type = body.get("type").and_then(|s| s.as_str()).unwrap_or("workspace:unknown");
             
-            if msg_type == "workspace:tree" || msg_type == "workspace:full" {
+            if msg_type == "workspace:tree" || msg_type == "workspace:full" || msg_type == "workspace:fragment" {
                 // Forward the whole body as a generic WorkspaceEvent
                 // We'll define a new InternalBroadcast variant for this flexible event
                 let _ = tx.send(InternalBroadcast::WorkspaceEvent(body));

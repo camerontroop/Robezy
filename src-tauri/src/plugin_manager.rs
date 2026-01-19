@@ -181,35 +181,12 @@ local updatePending = false
 
 -- flatten: converts instance to flat serializable map
 local function serializeInstance(inst)
-    local data = {}
-    data.Name = inst.Name
-    data.ClassName = inst.ClassName
-    data.Path = inst:GetFullName()
-    
-    -- Attributes (often useful for agents)
-    data.Attributes = inst:GetAttributes()
-
-    -- Physics
-    if inst:IsA("BasePart") then
-        data.Size = {inst.Size.X, inst.Size.Y, inst.Size.Z}
-        data.Position = {inst.Position.X, inst.Position.Y, inst.Position.Z}
-        data.Anchored = inst.Anchored
-        data.CanCollide = inst.CanCollide
-        data.Transparency = inst.Transparency
-        data.Color = inst.Color:ToHex()
-        data.Material = inst.Material.Name
-    end
-    
-    -- Logic
-    if inst:IsA("Script") or inst:IsA("LocalScript") then
-        data.Enabled = inst.Enabled
-    end
-    
-    if string.find(inst.ClassName, "Value") then
-        pcall(function() data.Value = inst.Value end)
-    end
-    
-    return data
+    -- Minimal Payload (User Request: "It's all about the names")
+    return {
+        Name = inst.Name,
+        ClassName = inst.ClassName,
+        Path = inst:GetFullName()
+    }
 end
 
 local function sendSnapshot()
@@ -239,7 +216,7 @@ local function sendSnapshot()
 
     -- CHUNKED SENDER
     local buffer = {}
-    local MAX_BUFFER = 200 -- Sends ~200 items per chunk (Safe for limit)
+    local MAX_BUFFER = 2000 -- Optimized for lightweight items
     local chunkId = 0
     local sessionId = tostring(os.time()) -- Unique ID for this snapshot sequence
 
