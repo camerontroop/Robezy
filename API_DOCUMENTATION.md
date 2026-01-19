@@ -29,7 +29,7 @@ Returns a list of all active Roblox Studio sessions currently connected to RoBez
   {
     "place_id": 987654321,
     "place_name": "My Amazing RPG",
-    "session_id": "550e8400-e29b-41d4-a716-446655440000",
+    "session_id": "a1b2c3d4-...",
     "project_id": "a1b2c3d4-...",
     "bound_folder": "/Users/name/Documents/RobloxProjects/My Amazing RPG_a1b2c3d4"
   }
@@ -37,7 +37,8 @@ Returns a list of all active Roblox Studio sessions currently connected to RoBez
 ```
 
 *   **`bound_folder`**: This is the "Magic Key". This folder contains the **exact** mirroring of the Roblox game.
-*   **`project_id`**: A stable ID unique to this game (persists even if renamed).
+*   **`project_id`**: A stable, lifetime ID unique to this game file. It persists across restarts and renames.
+*   **`session_id`**: (Legacy) This will now match `project_id` to ensure context consistency. Log events will use this ID.
 
 ---
 

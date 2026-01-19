@@ -52,7 +52,17 @@ local HttpService = game:GetService("HttpService")
 
 local ScriptContext = game:GetService("ScriptContext")
 local COMPANION_URL = "http://localhost:3030/logs"
-local sessionId = tostring(os.time()) -- Init with startup time
+local sessionId = tostring(os.time()) -- Default to timestamp
+-- [NEW] Check immediately on load for stable ID
+pcall(function()
+    local sv = game:GetService("ServerStorage"):FindFirstChild("RoBezyConfig")
+    if sv and sv:IsA("StringValue") then
+        local data = HttpService:JSONDecode(sv.Value)
+        if data.id then
+            sessionId = data.id
+        end
+    end
+end)
 
 local lastLogContent = ""
 local lastLogTime = 0
@@ -63,6 +73,16 @@ local function onMessageOut(message, messageType)
     -- Check for Sentinel
     if message == "--> SESSION START <--" then
         sessionId = tostring(os.time())
+        -- [NEW] Attempt to resolve stable Project ID from Storage
+        pcall(function()
+            local sv = game:GetService("ServerStorage"):FindFirstChild("RoBezyConfig")
+            if sv and sv:IsA("StringValue") then
+                local data = HttpService:JSONDecode(sv.Value)
+                if data.id then
+                    sessionId = data.id -- Override with Stable Project ID
+                end
+            end
+        end)
         print("Connector: New Session Started (" .. sessionId .. ")")
         return 
     end
@@ -1277,25 +1297,24 @@ local function onConnectClick()
     -- CONNECT
     connectBtn.Text = "CONNECTING..."
     
-    -- 1. Session ID
-    local sessionId = HttpService:GenerateGUID(false)
-    State.SessionId = sessionId
-    
-    -- 2. Project ID
+    -- 1. Resolve Session Identity (Persistent)
     local ServerStorage = game:GetService("ServerStorage")
     local configValue = ServerStorage:FindFirstChild("RoBezyConfig")
-    local projectId = ""
+    local storedId = nil
     
     if configValue and configValue:IsA("StringValue") then
         local success, config = pcall(function() return HttpService:JSONDecode(configValue.Value) end)
-        if success and config.id then projectId = config.id end
+        if success and config.id then storedId = config.id end
     end
     
-    --[NEW] Don't generate ID locally if missing. Let Backend resolve it.
-    if projectId == "" then
-        projectId = nil
-    end
-    -- State.ProjectId = projectId -- Wait until confirmed
+    -- If stored ID exists, use it as SESSION ID (Project Lifetime ID)
+    -- Else, generate new one (this becomes the Project ID later)
+    local sessionId = storedId or HttpService:GenerateGUID(false)
+    State.SessionId = sessionId
+    
+    -- ProjectID is technically the same now, but we send it implicitly
+    local projectId = storedId 
+    if not projectId then projectId = nil end
 
     -- 3. Gather & Chunk Files
     local allFiles = gatherProjectFiles()
@@ -1381,9 +1400,19 @@ local function onConnectClick()
         
         if data and data.project_id then
             local serverId = data.project_id
-            print("RoBezy: Server assigned Project ID: " .. serverId)
+            print("RoBezy: Server confirmed stable Project ID: " .. serverId)
             State.ProjectId = serverId
             
+            -- If we generated a new ID vs what the server gave us (unlikely unless collision), update SessionId?
+            -- No, the server respects our requested Session(Project) ID if valid.
+            -- But if we were brand new "Place 1" with no ID, the server MIGHT have found an existing folder.
+            -- In that case, we should ADOPT the server's ID for future sessions.
+            
+            if State.SessionId ~= serverId then
+                 print("RoBezy: Adopting existing Project ID as Session ID: " .. serverId)
+                 State.SessionId = serverId
+            end
+
             -- Persist to Config (so it saves with the place)
             if not configValue then
                 configValue = Instance.new("StringValue")
