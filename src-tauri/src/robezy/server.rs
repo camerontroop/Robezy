@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use warp::Filter;
 use serde::Deserialize; 
+use std::net::SocketAddr;
 use crate::robezy::session::{SessionManager, SessionIdentity, FileChange};
 
 // Request Structs must be module-level for safety
@@ -72,10 +73,11 @@ pub async fn start_robezy_server(session_manager: Arc<Mutex<SessionManager>>, po
             };
             
             println!("RoBezy HTTP: Connecting {} ({})", identity.place_name, identity.session_id);
-            let final_id = manager.lock().unwrap().register_session(identity, req.files);
+            let final_id = manager.lock().unwrap().register_session(identity.clone(), req.files);
             
             warp::reply::json(&serde_json::json!({
                 "status": "connected",
+                "session_id": identity.session_id,
                 "project_id": final_id
             }))
         });
@@ -306,9 +308,9 @@ pub async fn start_robezy_server(session_manager: Arc<Mutex<SessionManager>>, po
         });
 
     let cors = warp::cors()
-        .allow_any_origin() // For development (file:// or localhost)
-        .allow_methods(vec!["GET", "POST", "OPTIONS"])
-        .allow_headers(vec!["content-type"]);
+        .allow_any_origin()
+        .allow_headers(vec!["Content-Type", "Accept", "User-Agent", "Sec-Fetch-Mode", "Referer", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers", "Access-Control-Allow-Private-Network"])
+        .allow_methods(vec!["GET", "POST", "OPTIONS"]);
 
     let routes = connect_route
         .or(upload_route)
@@ -320,8 +322,19 @@ pub async fn start_robezy_server(session_manager: Arc<Mutex<SessionManager>>, po
         .or(session_by_id_route)
         .or(proxy_write_route)
         .or(bind_route)
-        .with(cors);
+        .with(cors)
+        .with(warp::reply::with::header("Access-Control-Allow-Private-Network", "true"));
 
-    println!("RoBezy HTTP Server listening on 127.0.0.1:{}", port);
-    warp::serve(routes).run(([127, 0, 0, 1], port)).await;
+    println!("RoBezy HTTP Server listening on 0.0.0.0:{}", port);
+    
+    // Spawn IPv4
+    let routes_v4 = routes.clone();
+    tauri::async_runtime::spawn(async move {
+        let addr: SocketAddr = ([0, 0, 0, 0], port).into();
+        warp::serve(routes_v4).run(addr).await;
+    });
+
+    // Spawn IPv6 (Matches server_http.rs for localhost compatibility)
+    let addr_v6: SocketAddr = ([0, 0, 0, 0, 0, 0, 0, 1], port).into();
+    warp::serve(routes).run(addr_v6).await;
 }

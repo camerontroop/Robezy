@@ -24,7 +24,6 @@ fn get_roblox_plugins_dir() -> Option<PathBuf> {
     }
 }
 
-// RENAMED from install_rojo_plugin
 pub async fn install_plugins() -> Result<String, String> {
     let plugins_dir = get_roblox_plugins_dir()
         .ok_or("Could not find Roblox plugins directory")?;
@@ -33,9 +32,6 @@ pub async fn install_plugins() -> Result<String, String> {
         .map_err(|e| format!("Failed to create plugins dir: {}", e))?;
     
     // Install LogListener
-    // In a real build, we should bundle this file. For now, we'll write the raw XML content directly
-    // or assume we can read it from resources. 
-    // Simplified: Embed the XML string here to guarantee it exists without resource bundling complexity for this demo.
     let log_listener_xml = r#"<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
 	<Meta name="ExplicitAutoJoints">true</Meta>
 	<External>null</External>
@@ -420,369 +416,6 @@ end
     fs::write(&command_path, command_listener_xml).await
         .map_err(|e| format!("Failed to write CommandListener: {}", e))?;
 
-
-    // Install RoBezyLoop
-    let robezy_loop_xml = r##"<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-	<Meta name="ExplicitAutoJoints">true</Meta>
-	<External>null</External>
-	<External>nil</External>
-	<Item class="Script" referent="RBX0">
-		<Properties>
-			<Content name="LinkedSource"><null></null></Content>
-			<int64 name="SourceAssetId">-1</int64>
-			<BinaryString name="Tags"></BinaryString>
-			<string name="Name">RoBezyLoop</string>
-			<string name="ScriptGuid">{12345678-90AB-CDEF-1234-567890ABCDEF}</string>
-			<ProtectedString name="Source"><![CDATA[local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-
--- ROBEZY V3 CONFIG
-local ROBEZY_URL = "http://127.0.0.1:3032/robezy"
-local POLL_URL = ROBEZY_URL .. "/poll_changes"
-local CHECK_URL = ROBEZY_URL .. "/sessions"
-local HEARTBEAT_URL = ROBEZY_URL .. "/heartbeat"
-local UPLOAD_URL = ROBEZY_URL .. "/upload"
-local CoreGui = game:GetService("CoreGui")
-
--- [REMOVED] Safety Wait (Causes hang in Edit mode)
--- if not game:IsLoaded() then
---     game.Loaded:Wait()
---     task.wait(1)
--- end
-
-local ROBEZY_URL = "http://127.0.0.1:3032/robezy"
-local CONNECT_URL = ROBEZY_URL .. "/connect"
-local UPLOAD_URL = ROBEZY_URL .. "/upload"
-local DISCONNECT_URL = ROBEZY_URL .. "/disconnect"
-local HEARTBEAT_URL = ROBEZY_URL .. "/heartbeat"
-local CHECK_URL = ROBEZY_URL .. "/sessions" -- Using this as heartbeat for now
-local POLL_URL = ROBEZY_URL .. "/poll_changes" -- POLL INBOUND from FS
-
--- === THEME CONFIG ===
-local Colors = {
-    Background = Color3.fromRGB(32, 33, 36),
-    Surface = Color3.fromRGB(45, 46, 50),
-    Primary = Color3.fromRGB(0, 122, 255),
-    PrimaryHover = Color3.fromRGB(0, 140, 255),
-    Error = Color3.fromRGB(255, 69, 58),
-    Success = Color3.fromRGB(48, 209, 88),
-    TextPrimary = Color3.fromHex("FFFFFF"),
-    TextSecondary = Color3.fromHex("CCCCCC"),
-    Disabled = Color3.fromRGB(60, 60, 60)
-}
-
--- === UI SETUP ===
-local toolbar, button, widget, dockInfo
-
-local success, err = pcall(function()
-    toolbar = plugin:CreateToolbar("RoBezy Sync")
-    if toolbar then
-        button = toolbar:CreateButton("RoBezy", "Open RoBezy Sync", "rbxasset://textures/StudioToolbox/AssetConfig/package.png")
-        button.ClickableWhenViewportHidden = true
-    end
-
-    dockInfo = DockWidgetPluginGuiInfo.new(
-        Enum.InitialDockState.Right,
-        false, false, 
-        250, 400,
-        200, 300
-    )
-
-    widget = plugin:CreateDockWidgetPluginGui("RoBezyWidget_V3", dockInfo)
-    widget.Title = "RoBezy Sync"
-end)
-
-if not success then
-    warn("RoBezy UI Setup Failed: " .. tostring(err))
-    return
-end
-
--- Main Frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.fromScale(1, 1)
-mainFrame.BackgroundColor3 = Colors.Background
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = widget
-
--- Header
-local header = Instance.new("Frame")
-header.Name = "Header"
-header.Size = UDim2.new(1, 0, 0, 70)
-header.BackgroundColor3 = Colors.Surface
-header.BorderSizePixel = 0
-header.Parent = mainFrame
-
-local title = Instance.new("TextLabel")
-title.Text = "RoBezy"
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 28
-title.TextColor3 = Colors.TextPrimary
-title.Size = UDim2.fromScale(1, 1)
-title.Position = UDim2.fromOffset(0, -8) -- Nudge
-title.BackgroundTransparency = 1
-title.Parent = header
-
-local subtitle = Instance.new("TextLabel")
-subtitle.Text = "SYNC STUDIO"
-subtitle.Font = Enum.Font.GothamBold
-subtitle.TextSize = 10
-subtitle.TextColor3 = Colors.Primary
-subtitle.Size = UDim2.fromScale(1, 0)
-subtitle.Position = UDim2.new(0.5, 0, 0.75, 0)
-subtitle.AnchorPoint = Vector2.new(0.5, 0.5)
-subtitle.BackgroundTransparency = 1
-subtitle.Parent = header
-
--- Status Section
-local statusContainer = Instance.new("Frame")
-statusContainer.Name = "StatusContainer"
-statusContainer.Size = UDim2.fromScale(1, 0.2)
-statusContainer.Position = UDim2.fromOffset(0, 80)
-statusContainer.BackgroundTransparency = 1
-statusContainer.Parent = mainFrame
-
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Text = "COMPANION APP STATUS"
-statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextSize = 10
-statusLabel.TextColor3 = Colors.TextSecondary
-statusLabel.Size = UDim2.new(1, 0, 0, 20)
-statusLabel.Position = UDim2.fromOffset(0, 0)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Parent = statusContainer
-
-local statusIndicator = Instance.new("Frame")
-statusIndicator.Size = UDim2.fromOffset(12, 12)
-statusIndicator.Position = UDim2.new(0.5, -70, 0.5, 10)
-statusIndicator.AnchorPoint = Vector2.new(0.5, 0.5)
-statusIndicator.BackgroundColor3 = Colors.Disabled
-statusIndicator.Parent = statusContainer
-
-local uiCornerDot = Instance.new("UICorner")
-uiCornerDot.CornerRadius = UDim.new(1, 0)
-uiCornerDot.Parent = statusIndicator
-
-local statusText = Instance.new("TextLabel")
-statusText.Text = "Searching..."
-statusText.Font = Enum.Font.GothamMedium
-statusText.TextSize = 14
-statusText.TextColor3 = Colors.TextPrimary
-statusText.Position = UDim2.new(0.5, 15, 0.5, 10)
-statusText.AnchorPoint = Vector2.new(0.5, 0.5)
-statusText.TextXAlignment = Enum.TextXAlignment.Left
-statusText.BackgroundTransparency = 1
-statusText.Parent = statusContainer
-
--- Connect Button
-local connectBtn = Instance.new("TextButton")
-connectBtn.Name = "ConnectBtn"
-connectBtn.Size = UDim2.new(0.8, 0, 0, 50)
-connectBtn.Position = UDim2.new(0.5, 0, 0.85, 0)
-connectBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-connectBtn.BackgroundColor3 = Colors.Disabled
-connectBtn.Text = "WAITING..."
-connectBtn.Font = Enum.Font.GothamBold
-connectBtn.TextSize = 18
-connectBtn.TextColor3 = Colors.TextPrimary
-connectBtn.AutoButtonColor = true
-connectBtn.Parent = mainFrame
-
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 8)
-btnCorner.Parent = connectBtn
-
--- Info Footer
-local footer = Instance.new("TextLabel")
-footer.Text = "v3.0.0"
-footer.Size = UDim2.new(1, 0, 0, 20)
-footer.Position = UDim2.new(0, 0, 1, -25)
-footer.BackgroundTransparency = 1
-footer.TextColor3 = Colors.Disabled
-footer.TextSize = 10
-footer.Font = Enum.Font.Gotham
-footer.Parent = mainFrame
-
--- === LOGIC STATE ===
-local State = {
-    Connected = false,
-    SessionId = "",
-    ProjectId = "",
-    ApplyingChanges = false,
-    AppDetected = false
-}
-
--- DEBOUNCE CACHE
-local LastWrittenContent = {}
-
--- FORWARD DECLARATIONS
-local updateUI
-local checkAppStatus
-
--- HELPER: ensureInstance
-local function ensureInstance(fsPath, leafClass)
-    fsPath = string.gsub(fsPath, "\\", "/")
-    local segments = string.split(fsPath, "/")
-    if #segments == 0 then return nil end
-    
-    local serviceName = segments[1]
-    local success, current = pcall(function() return game:GetService(serviceName) end)
-    if not success or not current then return nil end
-    
-    for i = 2, #segments do
-        local nameStr = segments[i]
-        local isLast = (i == #segments)
-        
-        if isLast then
-             nameStr = string.gsub(nameStr, "%.server%.lua$", "")
-             nameStr = string.gsub(nameStr, "%.client%.lua$", "")
-             nameStr = string.gsub(nameStr, "%.lua$", "")
-             nameStr = string.gsub(nameStr, "%.json$", "")
-             if nameStr == "init" then return current end
-        end
-        
-        local child = current:FindFirstChild(nameStr)
-        if not child then
-            if isLast then
-                local classToCreate = leafClass or "ModuleScript"
-                if classToCreate ~= "Script" and classToCreate ~= "LocalScript" and classToCreate ~= "ModuleScript" then
-                    classToCreate = "ModuleScript"
-                end
-                child = Instance.new(classToCreate)
-                child.Name = nameStr
-                child.Parent = current
-            else
-                child = Instance.new("Folder")
-                child.Name = nameStr
-                child.Parent = current
-            end
-        end
-        current = child
-    end
-    return current
-end
-
-local function syncLogic(scriptInstance)
-    if not State.Connected then return end
-    if State.ApplyingChanges then return end
-    if LastWrittenContent[scriptInstance] == scriptInstance.Source then return end
-
-    local SYNC_URL = ROBEZY_URL .. "/sync"
-    local function getPath(instance)
-        local path = instance.Name
-        local callback = instance.Parent
-        while callback and callback ~= game do
-            path = callback.Name .. "/" .. path
-            callback = callback.Parent
-        end
-        return path
-    end
-    
-    local guid = scriptInstance:GetDebugId()
-    local className = scriptInstance.ClassName
-    local payload = {
-        session_id = State.SessionId,
-        changes = {{
-            change_type = "write",
-            path = getPath(scriptInstance),
-            content = scriptInstance.Source,
-            is_script = true,
-            guid = guid,
-            class_name = className
-        }}
-    }
-    pcall(function()
-        HttpService:PostAsync(SYNC_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
-    end)
-end
-
-local function pollChanges()
-    if not State.Connected then return end
-    local url = POLL_URL .. "?session_id=" .. State.SessionId
-    local success, response = pcall(function() return HttpService:GetAsync(url, true) end)
-    
-    if success then
-        local valid, changes = pcall(function() return HttpService:JSONDecode(response) end)
-        if valid and changes and #changes > 0 then
-             print("RoBezy: Received " .. #changes .. " changes")
-             State.ApplyingChanges = true
-             for _, change in ipairs(changes) do
-                  if change.change_type == "write" then
-                       local inst = ensureInstance(change.path, change.class_name)
-                       if inst and inst:IsA("LuaSourceContainer") and change.content then
-                            print("RoBezy: Syncing " .. inst:GetFullName())
-                            inst.Source = change.content
-                            LastWrittenContent[inst] = change.content -- UPDATE DEBOUNCE
-                       end
-                  end
-             end
-             State.ApplyingChanges = false
-        end
-    end
-end
-
--- WATCHERS
-local function setupWatchers()
-    local function watchScript(scriptInstance)
-        if not scriptInstance:IsA("LuaSourceContainer") then return end
-        scriptInstance.Changed:Connect(function(prop)
-            if prop == "Source" then syncLogic(scriptInstance) end
-        end)
-        syncLogic(scriptInstance)
-    end
-
-    local services = {game.Workspace, game.ServerScriptService, game.ReplicatedStorage, game.ReplicatedFirst, game.StarterPlayer, game.StarterPack}
-    for _, service in ipairs(services) do
-        for _, desc in ipairs(service:GetDescendants()) do watchScript(desc) end
-        service.DescendantAdded:Connect(watchScript)
-    end
-end
-
--- UI LOGIC
-local function updateUI()
-    -- Minimal UI update helper
-    -- (Assuming UI objects exist globally in this scope or are created elsewhere)
-end
-
-local function checkAppStatus()
-    local success, _ = pcall(function() return HttpService:GetAsync(CHECK_URL) end)
-    local oldApp = State.AppDetected
-    State.AppDetected = success
-    if oldApp ~= State.AppDetected then updateUI() end
-end
-
-local function sendHeartbeat()
-    if not State.Connected then return end
-    pcall(function()
-        local payload = { session_id = State.SessionId }
-        HttpService:PostAsync(HEARTBEAT_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
-    end)
-end
-
-
--- MAIN LOOP
-task.spawn(function()
-    setupWatchers() -- Init watchers
-    local tick = 0
-    while true do
-        checkAppStatus()
-        pollChanges()
-        tick = tick + 1
-        if tick % 10 == 0 then sendHeartbeat() end
-        task.wait(1)
-    end
-end)
-
-print("RoBezy Professional UI Loaded (v3 + Two-Way Sync + Debounce Fixed)")
-]]></ProtectedString>
-		</Properties>
-	</Item>
-</roblox>"##;
-
-    let command_path = plugins_dir.join("CommandListener.rbxmx");
-    fs::write(&command_path, command_listener_xml).await
-        .map_err(|e| format!("Failed to write CommandListener: {}", e))?;
-
     // Install RoBezyLoop
     let robezy_loop_xml = r##"<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
 	<Meta name="ExplicitAutoJoints">true</Meta>
@@ -799,13 +432,7 @@ print("RoBezy Professional UI Loaded (v3 + Two-Way Sync + Debounce Fixed)")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 
--- [REMOVED] Safety Wait (Causes hang in Edit mode)
--- if not game:IsLoaded() then
---     game.Loaded:Wait()
---     task.wait(1)
--- end
-
-local ROBEZY_URL = "http://127.0.0.1:3032/robezy"
+local ROBEZY_URL = "http://localhost:3032/robezy"
 local CONNECT_URL = ROBEZY_URL .. "/connect"
 local UPLOAD_URL = ROBEZY_URL .. "/upload"
 local DISCONNECT_URL = ROBEZY_URL .. "/disconnect"
@@ -827,15 +454,16 @@ local Colors = {
 }
 
 -- === UI SETUP ===
-local toolbar, button, widget, dockInfo
+local toolbar, button, widget, dockInfo, mainFrame, header, statusContainer, statusIndicator, connectBtn, statusText, footer
 
-local success, err = pcall(function()
+-- SAFE UI CREATION (No Corners, No fancy styling that crashes)
+local function createUI()
+    if widget then return end -- Already created
+
     toolbar = plugin:CreateToolbar("RoBezy Sync")
-    if toolbar then
-        button = toolbar:CreateButton("RoBezy", "Open RoBezy Sync", "rbxasset://textures/StudioToolbox/AssetConfig/package.png")
-        button.ClickableWhenViewportHidden = true
-    end
-
+    button = toolbar:CreateButton("RoBezy", "Open RoBezy Sync", "rbxasset://textures/StudioToolbox/AssetConfig/package.png")
+    button.ClickableWhenViewportHidden = true
+    
     dockInfo = DockWidgetPluginGuiInfo.new(
         Enum.InitialDockState.Right,
         false, false, 
@@ -845,134 +473,135 @@ local success, err = pcall(function()
 
     widget = plugin:CreateDockWidgetPluginGui("RoBezyWidget_V3", dockInfo)
     widget.Title = "RoBezy Sync"
-end)
 
-if not success then
-    warn("RoBezy UI Setup Failed: " .. tostring(err))
-    return
+    -- Main Frame
+    mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.fromScale(1, 1)
+    mainFrame.BackgroundColor3 = Colors.Background
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = widget
+
+    -- Header
+    header = Instance.new("Frame")
+    header.Name = "Header"
+    header.Size = UDim2.new(1, 0, 0, 70)
+    header.BackgroundColor3 = Colors.Surface
+    header.BorderSizePixel = 0
+    header.Parent = mainFrame
+
+    local title = Instance.new("TextLabel")
+    title.Text = "RoBezy"
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 28
+    title.TextColor3 = Colors.TextPrimary
+    title.Size = UDim2.fromScale(1, 1)
+    title.Position = UDim2.fromOffset(0, -8) -- Nudge
+    title.BackgroundTransparency = 1
+    title.Parent = header
+
+    -- Status Section
+    statusContainer = Instance.new("Frame")
+    statusContainer.Name = "StatusContainer"
+    statusContainer.Size = UDim2.fromScale(1, 0.2)
+    statusContainer.Position = UDim2.fromOffset(0, 80)
+    statusContainer.BackgroundTransparency = 1
+    statusContainer.Parent = mainFrame
+
+    -- INDICATOR (Box instead of circle to avoid UICorner crash)
+    statusIndicator = Instance.new("Frame")
+    statusIndicator.Size = UDim2.fromOffset(12, 12)
+    statusIndicator.Position = UDim2.new(0.5, -70, 0.5, 10)
+    statusIndicator.AnchorPoint = Vector2.new(0.5, 0.5)
+    statusIndicator.BackgroundColor3 = Colors.Disabled
+    statusIndicator.BorderSizePixel = 0
+    statusIndicator.Parent = statusContainer
+
+    statusText = Instance.new("TextLabel")
+    statusText.Text = "Searching..."
+    statusText.Font = Enum.Font.GothamMedium
+    statusText.TextSize = 14
+    statusText.TextColor3 = Colors.TextPrimary
+    statusText.Position = UDim2.new(0.5, 15, 0.5, 10)
+    statusText.AnchorPoint = Vector2.new(0.5, 0.5)
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.BackgroundTransparency = 1
+    statusText.Parent = statusContainer
+
+    -- Connect Button (Box, no corner)
+    connectBtn = Instance.new("TextButton")
+    connectBtn.Name = "ConnectBtn"
+    connectBtn.Size = UDim2.new(0.8, 0, 0, 50)
+    connectBtn.Position = UDim2.new(0.5, 0, 0.85, 0)
+    connectBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+    connectBtn.BackgroundColor3 = Colors.Disabled
+    connectBtn.Text = "WAITING..."
+    connectBtn.Font = Enum.Font.GothamBold
+    connectBtn.TextSize = 18
+    connectBtn.TextColor3 = Colors.TextPrimary
+    connectBtn.AutoButtonColor = true
+    connectBtn.BorderSizePixel = 0
+    connectBtn.Parent = mainFrame
+
+    -- Info Footer
+    footer = Instance.new("TextLabel")
+    footer.Text = "v1.1.11"
+    footer.Size = UDim2.new(1, 0, 0, 20)
+    footer.Position = UDim2.new(0, 0, 1, -25)
+    footer.BackgroundTransparency = 1
+    footer.TextColor3 = Colors.Disabled
+    footer.TextSize = 10
+    footer.Font = Enum.Font.Gotham
+    footer.Parent = mainFrame
+
+    -- [CRITICAL FIX] TOOLBAR HANDLER
+    button.Click:Connect(function()
+        widget.Enabled = not widget.Enabled
+    end)
 end
 
--- Main Frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.fromScale(1, 1)
-mainFrame.BackgroundColor3 = Colors.Background
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = widget
-
--- Header
-local header = Instance.new("Frame")
-header.Name = "Header"
-header.Size = UDim2.new(1, 0, 0, 70)
-header.BackgroundColor3 = Colors.Surface
-header.BorderSizePixel = 0
-header.Parent = mainFrame
-
-local title = Instance.new("TextLabel")
-title.Text = "RoBezy"
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 28
-title.TextColor3 = Colors.TextPrimary
-title.Size = UDim2.fromScale(1, 1)
-title.Position = UDim2.fromOffset(0, -8) -- Nudge
-title.BackgroundTransparency = 1
-title.Parent = header
-
-local subtitle = Instance.new("TextLabel")
-subtitle.Text = "SYNC STUDIO"
-subtitle.Font = Enum.Font.GothamBold
-subtitle.TextSize = 10
-subtitle.TextColor3 = Colors.Primary
-subtitle.Size = UDim2.fromScale(1, 0)
-subtitle.Position = UDim2.new(0.5, 0, 0.75, 0)
-subtitle.AnchorPoint = Vector2.new(0.5, 0.5)
-subtitle.BackgroundTransparency = 1
-subtitle.Parent = header
-
--- Status Section
-local statusContainer = Instance.new("Frame")
-statusContainer.Name = "StatusContainer"
-statusContainer.Size = UDim2.fromScale(1, 0.2)
-statusContainer.Position = UDim2.fromOffset(0, 80)
-statusContainer.BackgroundTransparency = 1
-statusContainer.Parent = mainFrame
-
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Text = "COMPANION APP STATUS"
-statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextSize = 10
-statusLabel.TextColor3 = Colors.TextSecondary
-statusLabel.Size = UDim2.new(1, 0, 0, 20)
-statusLabel.Position = UDim2.fromOffset(0, 0)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Parent = statusContainer
-
-local statusIndicator = Instance.new("Frame")
-statusIndicator.Size = UDim2.fromOffset(12, 12)
-statusIndicator.Position = UDim2.new(0.5, -70, 0.5, 10)
-statusIndicator.AnchorPoint = Vector2.new(0.5, 0.5)
-statusIndicator.BackgroundColor3 = Colors.Disabled
-statusIndicator.Parent = statusContainer
-
-local uiCornerDot = Instance.new("UICorner")
-uiCornerDot.CornerRadius = UDim.new(1, 0)
-uiCornerDot.Parent = statusIndicator
-
-local statusText = Instance.new("TextLabel")
-statusText.Text = "Searching..."
-statusText.Font = Enum.Font.GothamMedium
-statusText.TextSize = 14
-statusText.TextColor3 = Colors.TextPrimary
-statusText.Position = UDim2.new(0.5, 15, 0.5, 10)
-statusText.AnchorPoint = Vector2.new(0.5, 0.5)
-statusText.TextXAlignment = Enum.TextXAlignment.Left
-statusText.BackgroundTransparency = 1
-statusText.Parent = statusContainer
-
--- Connect Button
-local connectBtn = Instance.new("TextButton")
-connectBtn.Name = "ConnectBtn"
-connectBtn.Size = UDim2.new(0.8, 0, 0, 50)
-connectBtn.Position = UDim2.new(0.5, 0, 0.85, 0)
-connectBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-connectBtn.BackgroundColor3 = Colors.Disabled
-connectBtn.Text = "WAITING..."
-connectBtn.Font = Enum.Font.GothamBold
-connectBtn.TextSize = 18
-connectBtn.TextColor3 = Colors.TextPrimary
-connectBtn.AutoButtonColor = true
-connectBtn.Parent = mainFrame
-
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 8)
-btnCorner.Parent = connectBtn
-
--- Info Footer
-local footer = Instance.new("TextLabel")
-footer.Text = "v3.0.0"
-footer.Size = UDim2.new(1, 0, 0, 20)
-footer.Position = UDim2.new(0, 0, 1, -25)
-footer.BackgroundTransparency = 1
-footer.TextColor3 = Colors.Disabled
-footer.TextSize = 10
-footer.Font = Enum.Font.Gotham
-footer.Parent = mainFrame
+-- Try creating UI, safely
+local uiSuccess, uiErr = pcall(createUI)
+if not uiSuccess then
+    warn("RoBezy UI Setup Fatal Error: " .. tostring(uiErr))
+end
 
 -- === LOGIC STATE ===
 local State = {
     AppDetected = false,
     Connected = false,
-    ApplyingChanges = false, -- Prevent loopback (Studio -> FS -> Studio)
+    ApplyingChanges = false,
     SessionId = "",
     ProjectId = ""
 }
 
 -- === FUNCTIONS ===
 
+-- DIRTY STATE & POLL
+local DirtyScripts = {} 
+local LastWrittenContent = {}
+
+local function countDirty()
+    local c = 0
+    for _, _ in pairs(DirtyScripts) do c = c + 1 end
+    return c
+end
+
 local function updateUI()
+    -- Guard against missing UI elements if setup failed
+    if not connectBtn then return end
+
     if State.Connected then
-        connectBtn.Text = "DISCONNECT"
-        connectBtn.BackgroundColor3 = Colors.Error
+        local dirtyCount = countDirty()
+        
+        if dirtyCount > 0 then
+            connectBtn.Text = "PUSH CHANGES (" .. dirtyCount .. ")"
+            connectBtn.BackgroundColor3 = Color3.fromRGB(255, 149, 0) 
+        else
+            connectBtn.Text = "DISCONNECT"
+            connectBtn.BackgroundColor3 = Colors.Error
+        end
+        
         statusIndicator.BackgroundColor3 = Colors.Success
         statusText.Text = "Active Session"
         statusText.TextColor3 = Colors.Success
@@ -991,21 +620,19 @@ local function updateUI()
     end
 end
 
+-- FIX: Added missing checkAppStatus
 local function checkAppStatus()
-    local success, _ = pcall(function()
+    local success, err = pcall(function()
         return HttpService:GetAsync(CHECK_URL)
     end)
     
     local oldApp = State.AppDetected
     State.AppDetected = success
     
-    -- If App dies while connected, we effectively lose connection, but keep UI state until user notices or we implement watchdog
-    if not State.AppDetected and State.Connected then
-        -- Optional: Auto-disconnect visually warning
-        -- State.Connected = false 
-        -- print("RoBezy: Lost connection to app")
+    if not success and tick() % 10 < 1 then
+         warn("RoBezy Connection Error: " .. tostring(err))
     end
-
+    
     if oldApp ~= State.AppDetected then
         updateUI()
     end
@@ -1013,7 +640,7 @@ end
 
 local function syncLogic(scriptInstance)
     if not State.Connected then return end
-    if State.ApplyingChanges then return end -- Don't sync back what we just received
+    if State.ApplyingChanges then return end
     
     local SYNC_URL = ROBEZY_URL .. "/sync"
     
@@ -1027,10 +654,8 @@ local function syncLogic(scriptInstance)
         return path
     end
     
-    -- Use GetDebugId() for unique identification during session (handles same-named scripts)
     local guid = scriptInstance:GetDebugId()
     local className = scriptInstance.ClassName
-    
     local payload = {
         session_id = State.SessionId,
         changes = {{
@@ -1045,90 +670,61 @@ local function syncLogic(scriptInstance)
     pcall(function()
         HttpService:PostAsync(SYNC_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
     end)
+    
+     -- Mark clean + updating debounce logic to avoid loopback
+    DirtyScripts[scriptInstance] = nil
+    LastWrittenContent[scriptInstance] = scriptInstance.Source 
 end
 
--- === REVERSE SYNC (FS -> STUDIO) ===
 
-local function resolveInstance(fsPath)
-    -- fsPath example: "ServerScriptService/Folder/Script.server.lua"
-    -- Normalize
-    fsPath = string.gsub(fsPath, "\\", "/")
+local function forceSyncAll()
+    if not State.Connected then return end
     
-    local segments = string.split(fsPath, "/")
-    if #segments == 0 then return nil end
+    local dirtyCount = countDirty()
+    if dirtyCount == 0 then return end
     
-    local serviceName = segments[1]
-    local current = game:GetService(serviceName)
-    if not current then return nil end
+    if connectBtn then
+        connectBtn.Text = "PUSHING..."
+        connectBtn.BackgroundColor3 = Colors.PrimaryHover
+    end
+    task.wait(0.1)
     
-    for i = 2, #segments do
-        local nameStr = segments[i]
-        
-        -- Clean extension if it's the last segment
-        if i == #segments then
-             nameStr = string.gsub(nameStr, "%.server%.lua$", "")
-             nameStr = string.gsub(nameStr, "%.client%.lua$", "")
-             nameStr = string.gsub(nameStr, "%.lua$", "")
-             nameStr = string.gsub(nameStr, "%.json$", "")
-        end
-        
-        -- Find child
-        local nextObj = current:FindFirstChild(nameStr)
-        if not nextObj then
-             -- If not found, we can't edit it. Creating new files is complex (requiring class info).
-             return nil 
-        end
-        current = nextObj
+    for scriptInst, _ in pairs(DirtyScripts) do
+        syncLogic(scriptInst)
     end
     
-    return current
+    DirtyScripts = {}
+    updateUI()
 end
 
 local function ensureInstance(fsPath, leafClass)
-    -- fsPath example: "ServerScriptService/Folder/Script.server.lua"
     fsPath = string.gsub(fsPath, "\\", "/")
-    
     local segments = string.split(fsPath, "/")
     if #segments == 0 then return nil end
-    
     local serviceName = segments[1]
     local success, current = pcall(function() return game:GetService(serviceName) end)
     if not success or not current then return nil end
-    
     for i = 2, #segments do
         local nameStr = segments[i]
         local isLast = (i == #segments)
-        
-        -- Clean extension if it's the last segment
         if isLast then
              nameStr = string.gsub(nameStr, "%.server%.lua$", "")
              nameStr = string.gsub(nameStr, "%.client%.lua$", "")
              nameStr = string.gsub(nameStr, "%.lua$", "")
              nameStr = string.gsub(nameStr, "%.json$", "")
-             -- Handle init.lua? (Rojo style)
-             if nameStr == "init" then
-                -- Special handling: init.lua usually means the parent folder IS the script.
-                -- Use Parent as target. But Parent is 'current'.
-                -- If we are at 'init.lua', we modify 'current', we don't create a child named 'init'.
-                return current
-             end
+             if nameStr == "init" then return current end
         end
-        
         local child = current:FindFirstChild(nameStr)
         if not child then
             if isLast then
-                -- Create the Script
                 local classToCreate = leafClass or "ModuleScript"
-                -- Validate class
                 if classToCreate ~= "Script" and classToCreate ~= "LocalScript" and classToCreate ~= "ModuleScript" then
                     classToCreate = "ModuleScript"
                 end
-                
                 child = Instance.new(classToCreate)
                 child.Name = nameStr
                 child.Parent = current
             else
-                -- Create Intermediate Folder
                 child = Instance.new("Folder")
                 child.Name = nameStr
                 child.Parent = current
@@ -1136,65 +732,70 @@ local function ensureInstance(fsPath, leafClass)
         end
         current = child
     end
-    
     return current
 end
 
 local function pollChanges()
     if not State.Connected then return end
-    
     local url = POLL_URL .. "?session_id=" .. State.SessionId
-    local success, response = pcall(function()
-        return HttpService:GetAsync(url, true) -- no cache
-    end)
+    local success, response = pcall(function() return HttpService:GetAsync(url, true) end)
     
     if success then
         local valid, changes = pcall(function() return HttpService:JSONDecode(response) end)
         if valid and changes and #changes > 0 then
-             print("RoBezy: Received " .. #changes .. " changes from polling")
-             
+             print("RoBezy: Received " .. #changes .. " changes")
              State.ApplyingChanges = true
              for _, change in ipairs(changes) do
                   if change.change_type == "write" then
-                       -- Use ensureInstance instead of resolveInstance to CREATE if missing
                        local inst = ensureInstance(change.path, change.class_name)
                        if inst and inst:IsA("LuaSourceContainer") and change.content then
                             print("RoBezy: Syncing " .. inst:GetFullName())
                             inst.Source = change.content
-                       else
-                            print("RoBezy: Could not apply write to " .. change.path)
+                            LastWrittenContent[inst] = change.content 
+                            DirtyScripts[inst] = nil 
                        end
-                  -- Handle Deletes? For now just Writes.
                   end
              end
              State.ApplyingChanges = false
+             updateUI()
         end
     end
 end
 
+-- WATCHERS
 local function setupWatchers()
     local function watchScript(scriptInstance)
         if not scriptInstance:IsA("LuaSourceContainer") then return end
         scriptInstance.Changed:Connect(function(prop)
-            if prop == "Source" then
-                syncLogic(scriptInstance)
+            if prop == "Source" then 
+                if State.ApplyingChanges then return end 
+                if LastWrittenContent[scriptInstance] == scriptInstance.Source then return end 
+                
+                print("RoBezy: Detected Change in " .. scriptInstance.Name)
+                DirtyScripts[scriptInstance] = true
+                updateUI()
             end
         end)
-        syncLogic(scriptInstance)
     end
-
-    local services = {game.Workspace, game.ServerScriptService, game.ReplicatedStorage, game.ReplicatedFirst, game.StarterPlayer, game.StarterPack}
+    local services = {
+        game:GetService("Workspace"), 
+        game:GetService("ServerScriptService"), 
+        game:GetService("ReplicatedStorage"), 
+        game:GetService("ReplicatedFirst"), 
+        game:GetService("StarterPlayer"), 
+        game:GetService("StarterPack"), 
+        game:GetService("StarterGui"), 
+        game:GetService("ServerStorage"), 
+        game:GetService("Lighting")
+    }
     for _, service in ipairs(services) do
-        for _, desc in ipairs(service:GetDescendants()) do
-            watchScript(desc)
-        end
+        for _, desc in ipairs(service:GetDescendants()) do watchScript(desc) end
         service.DescendantAdded:Connect(watchScript)
     end
 end
 
 local function gatherProjectFiles()
     local files = {}
-    
     local function getPath(instance)
         local path = instance.Name
         local callback = instance.Parent
@@ -1204,237 +805,103 @@ local function gatherProjectFiles()
         end
         return path
     end
-
-    -- Add generic services
-    local services = {
-        game:GetService("Workspace"),
-        game:GetService("ServerScriptService"),
-        game:GetService("ReplicatedStorage"),
-        game:GetService("ReplicatedFirst"),
-        game:GetService("StarterPlayer"),
-        game:GetService("StarterGui"),
-        game:GetService("StarterPack"),
-        game:GetService("ServerStorage"),
-        game:GetService("Lighting")
-    }
-    
+    local services = {game.Workspace, game.ServerScriptService, game.ReplicatedStorage, game.ReplicatedFirst, game.StarterPlayer, game.StarterGui, game.StarterPack, game.ServerStorage, game.Lighting}
     for _, service in ipairs(services) do
-        if service then
-            for _, desc in ipairs(service:GetDescendants()) do
-                     if desc:IsA("LuaSourceContainer") then
-                         -- Ignore internal Runtime Link
-                         if desc.Name == "RoBezy_Snapshot_Link" then
-                             -- verify parent is ServerScriptService just to be safe?
-                             -- Or just ignore global uniqueness
-                         else
-                             local path = getPath(desc)
-                             local ext = ".lua"
-                     
-                     if desc:IsA("LocalScript") then
-                        ext = ".client.lua"
-                     elseif desc:IsA("ModuleScript") then
-                        ext = ".lua"
-                     elseif desc:IsA("Script") then
-                        ext = ".server.lua"
-                        -- Handle RunContext if needed, but .server.lua is safe default for Script
-                        if desc.RunContext == Enum.RunContext.Client then
-                            ext = ".client.lua"
-                        end
-                     end
-                     
-                         table.insert(files, {
-                             path = path .. ext,
-                             content = desc.Source
-                         })
-                     end -- End Ignore Check
-                 end
-            end
+        for _, desc in ipairs(service:GetDescendants()) do
+             if desc:IsA("LuaSourceContainer") and desc.Name ~= "RoBezy_Snapshot_Link" then
+                 local path = getPath(desc)
+                 local ext = ".lua"
+                 if desc:IsA("LocalScript") then ext = ".client.lua"
+                 elseif desc:IsA("Script") then ext = ".server.lua" end
+                 table.insert(files, {path = path..ext, content = desc.Source})
+             end
         end
     end
     return files
 end
 
-local function onConnectClick()
-    if not State.AppDetected then 
-        print("RoBezy: Cannot connect, app not detected.")
-        return 
-    end
-    
-    if State.Connected then
-        -- DISCONNECT
-        pcall(function()
-            local payload = { session_id = State.SessionId }
-            HttpService:PostAsync(DISCONNECT_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
-        end)
+-- BUTTON HANDLER
+if connectBtn then
+    connectBtn.MouseButton1Click:Connect(function()
+        if not State.AppDetected then return end
         
-        State.Connected = false
-        State.SessionId = ""
-        updateUI()
-        print("RoBezy: Disconnected")
-        return
-    end
-
-    -- CONNECT
-    connectBtn.Text = "CONNECTING..."
-    
-    -- 1. Resolve Session Identity (Persistent)
-    local ServerStorage = game:GetService("ServerStorage")
-    local configValue = ServerStorage:FindFirstChild("RoBezyConfig")
-    local storedId = nil
-    
-    if configValue and configValue:IsA("StringValue") then
-        local success, config = pcall(function() return HttpService:JSONDecode(configValue.Value) end)
-        if success and config.id then storedId = config.id end
-    end
-    
-    -- If stored ID exists, use it as SESSION ID (Project Lifetime ID)
-    -- Else, generate new one (this becomes the Project ID later)
-    local sessionId = storedId or HttpService:GenerateGUID(false)
-    State.SessionId = sessionId
-    
-    -- ProjectID is technically the same now, but we send it implicitly
-    local projectId = storedId 
-    if not projectId then projectId = nil end
-
-    -- 3. Gather & Chunk Files
-    local allFiles = gatherProjectFiles()
-    local filesToSend = allFiles
-    local CHUNK_LIMIT_BYTES = 800000 -- 800KB safe limit (Roblox limit ~1MB)
-
-    -- Estimate total size
-    local totalSize = 0
-    for _, f in ipairs(allFiles) do
-        totalSize = totalSize + #f.content + #f.path + 50
-    end
-    
-    if totalSize > CHUNK_LIMIT_BYTES then
-        print("RoBezy: Project size (" .. math.floor(totalSize/1024) .. " KB) exceeds limit. Using chunked upload.")
-        filesToSend = {} -- Send empty list in final connect
-        
-        local currentChunk = {}
-        local currentChunkSize = 0
-        local chunkCount = 0
-        
-        for _, f in ipairs(allFiles) do
-            local itemSize = #f.content + #f.path + 50
-            
-            -- If adding this item exceeds limit, send current chunk
-            if currentChunkSize + itemSize > CHUNK_LIMIT_BYTES and #currentChunk > 0 then
-                chunkCount = chunkCount + 1
-                print("RoBezy: Uploading chunk " .. chunkCount)
-                local chunkPayload = { session_id = sessionId, files = currentChunk }
-                local ok, err = pcall(function()
-                     HttpService:PostAsync(UPLOAD_URL, HttpService:JSONEncode(chunkPayload), Enum.HttpContentType.ApplicationJson, false)
-                end)
-                if not ok then
-                    warn("RoBezy Chunk Upload Failed: " .. tostring(err))
-                    connectBtn.Text = "UPLOAD FAILED"
-                    updateUI()
-                    return
-                end
-                
-                currentChunk = {}
-                currentChunkSize = 0
-            end
-            
-            table.insert(currentChunk, f)
-            currentChunkSize = currentChunkSize + itemSize
-        end
-        
-        -- Send last chunk
-        if #currentChunk > 0 then
-            chunkCount = chunkCount + 1
-            print("RoBezy: Uploading chunk " .. chunkCount)
-             local chunkPayload = { session_id = sessionId, files = currentChunk }
-             local ok, err = pcall(function()
-                  HttpService:PostAsync(UPLOAD_URL, HttpService:JSONEncode(chunkPayload), Enum.HttpContentType.ApplicationJson, false)
-             end)
-             if not ok then
-                warn("RoBezy Chunk Upload Failed: " .. tostring(err))
-                connectBtn.Text = "UPLOAD FAILED"
-                updateUI()
+        if State.Connected then
+            -- CHECK FOR DIRTY (Push Changes)
+            local dirtyCount = countDirty()
+            if dirtyCount > 0 then
+                forceSyncAll()
                 return
-             end
+            end
+            
+            -- DISCONNECT
+            pcall(function()
+                local payload = { session_id = State.SessionId }
+                HttpService:PostAsync(DISCONNECT_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
+            end)
+            State.Connected = false
+            State.SessionId = ""
+             updateUI()
+        else
+            -- CONNECT
+            connectBtn.Text = "CONNECTING..."
+            
+            -- RESOLVE SESSION ID
+            local ServerStorage = game:GetService("ServerStorage")
+            local configValue = ServerStorage:FindFirstChild("RoBezyConfig")
+            local storedId = nil
+            if configValue and configValue:IsA("StringValue") then
+                 local s, c = pcall(function() return HttpService:JSONDecode(configValue.Value) end)
+                 if s and c.id then storedId = c.id end
+            end
+            local sessionId = storedId or HttpService:GenerateGUID(false)
+            State.SessionId = sessionId
+            local projectId = storedId
+            
+            -- GATHER FILES
+            local allFiles = gatherProjectFiles()
+            local filesToSend = allFiles
+            
+            local payload = {
+                place_id = game.PlaceId,
+                place_name = game.Name,
+                session_id = sessionId,
+                project_id = projectId,
+                files = filesToSend
+            }
+        
+            local success, resp = pcall(function()
+                 return HttpService:PostAsync(CONNECT_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
+            end)
+            
+            if success then
+                local data = HttpService:JSONDecode(resp)
+                State.SessionId = data.session_id
+                State.ProjectId = data.project_id
+                State.Connected = true
+                
+                 pcall(function()
+                    local sv = game:GetService("ServerStorage"):FindFirstChild("RoBezyConfig")
+                    if not sv then 
+                        sv = Instance.new("StringValue")
+                        sv.Name = "RoBezyConfig"
+                        sv.Parent = game:GetService("ServerStorage")
+                    end
+                    sv.Value = HttpService:JSONEncode({id = State.SessionId})
+                end)
+                updateUI()
+            else
+                warn("RoBezy Connect Failed: " .. tostring(resp))
+                connectBtn.Text = "FAILED"
+                task.wait(1)
+                updateUI()
+            end
         end
-        print("RoBezy: Uploaded " .. chunkCount .. " chunks. Finalizing connection...")
-    end
-
-    local payload = {
-        place_id = game.PlaceId,
-        place_name = game.Name,
-        session_id = sessionId,
-        project_id = projectId,
-        files = filesToSend
-    }
-    
-    local success, response = pcall(function()
-        return HttpService:PostAsync(CONNECT_URL, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson, false)
     end)
-    
-    if success then
-        print("RoBezy Connect Success")
-        
-        -- [NEW] Process Response (Get Stable ID)
-        local data = nil
-        pcall(function() data = HttpService:JSONDecode(response) end)
-        
-        if data and data.project_id then
-            local serverId = data.project_id
-            print("RoBezy: Server confirmed stable Project ID: " .. serverId)
-            State.ProjectId = serverId
-            
-            -- If we generated a new ID vs what the server gave us (unlikely unless collision), update SessionId?
-            -- No, the server respects our requested Session(Project) ID if valid.
-            -- But if we were brand new "Place 1" with no ID, the server MIGHT have found an existing folder.
-            -- In that case, we should ADOPT the server's ID for future sessions.
-            
-            if State.SessionId ~= serverId then
-                 print("RoBezy: Adopting existing Project ID as Session ID: " .. serverId)
-                 State.SessionId = serverId
-            end
-
-            -- Persist to Config (so it saves with the place)
-            if not configValue then
-                configValue = Instance.new("StringValue")
-                configValue.Name = "RoBezyConfig"
-                configValue.Parent = ServerStorage
-            end
-            configValue.Value = HttpService:JSONEncode({ id = serverId, created = os.time() })
-        end
-
-        State.Connected = true
-        setupWatchers()
-        updateUI()
-    else
-        warn("RoBezy Connect Failed: " .. tostring(response))
-        connectBtn.Text = "FAILED"
-        task.wait(1)
-        updateUI()
-    end
 end
 
--- === LISTENERS ===
-connectBtn.Activated:Connect(onConnectClick)
-
--- FIXED: Button Toggle Logic
-button.Click:Connect(function() 
-    widget.Enabled = not widget.Enabled 
-    button:SetActive(widget.Enabled)
-end)
-
-widget:GetPropertyChangedSignal("Enabled"):Connect(function()
-    button:SetActive(widget.Enabled)
-end)
-
--- Auto-Disconnect Safety
-game:GetPropertyChangedSignal("Name"):Connect(function() 
-    if State.Connected then State.Connected = false; updateUI() end 
-end)
 game:GetPropertyChangedSignal("PlaceId"):Connect(function() 
     if State.Connected then State.Connected = false; updateUI() end 
 end)
-
-
 
 local function sendHeartbeat()
     if not State.Connected then return end
@@ -1444,23 +911,20 @@ local function sendHeartbeat()
     end)
 end
 
--- Heartbeat Loop
+-- MAIN LOOP
 task.spawn(function()
+    setupWatchers() 
     local tick = 0
     while true do
         checkAppStatus()
-        pollChanges() -- POLL INBOUND from FS
-        
+        pollChanges() 
         tick = tick + 1
-        if tick % 10 == 0 then -- Every 10 seconds
-             sendHeartbeat()
-        end
-        
-        task.wait(1) -- Check every 1 second
+        if tick % 10 == 0 then sendHeartbeat() end
+        task.wait(1)
     end
 end)
 
-print("RoBezy Professional UI Loaded (v3 + Two-Way Sync)")
+print("RoBezy Professional UI Loaded (v1.1.11 Safe+Toolbar)")
 ]]></ProtectedString>
 		</Properties>
 	</Item>
